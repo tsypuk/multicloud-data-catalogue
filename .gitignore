@@ -2,7 +2,11 @@
 .idea/
 .python-version
 .idea/misc.xml
-mcd_data_catalogue/__pycache__/
-mcd_data_catalogue/providers/__pycache__/
-mcd_data_catalogue/providers/aws_storage/__pycache__/
+multicloud_data_catalogue/__pycache__/
+multicloud_data_catalogue/providers/__pycache__/
+multicloud_data_catalogue/providers/aws_storage/__pycache__/
+tests/__pycache__/
 dist
+
+# any draw io files
+output.*.drawio

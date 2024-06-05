@@ -31,32 +31,114 @@ def table_get(table_name: str):
 
     # Key Schema
     console.rule("Key Schema")
-    item_table = Table(show_header=True, header_style="bold magenta")
+    schema_table = Table(show_header=True, header_style="bold magenta")
     column_width = 5
-    item_table.add_column("Key", style="dim", width=column_width)
-    item_table.add_column("Value")
+    schema_table.add_column("Key", style="dim", width=column_width)
+    schema_table.add_column("Value")
     for index, value in enumerate(table_details['Table']['KeySchema']):
-        item_table.add_row(f'{index}', f'{value}')
+        schema_table.add_row(f'{index}', f'{value}')
         # if len(index) > column_width:
         #     column_width = len(index)
-    console.print(item_table)
+    console.print(schema_table)
 
     console.rule("SSE")
     # SSE
     if 'SSEDescription' in table_details['Table']:
-        item_table = Table(show_header=True, header_style="bold magenta")
+        sse_table = Table(show_header=True, header_style="bold magenta")
         column_width = 5
-        item_table.add_column("Key", style="dim", width=column_width)
-        item_table.add_column("Value")
+        sse_table.add_column("Key", style="dim", width=column_width)
+        sse_table.add_column("Value")
         for (key, value) in table_details['Table']['SSEDescription'].items():
-            item_table.add_row(f'{key}', f'{value}')
+            sse_table.add_row(f'{key}', f'{value}')
             if len(key) > column_width:
                 column_width = len(key)
 
-        item_table.columns[0].width = column_width
-        console.print(item_table)
+        sse_table.columns[0].width = column_width
+        console.print(sse_table)
     else:
         print('NO SSE')
+
+    if 'LocalSecondaryIndexes' in table_details['Table']:
+        lsis_table = Table(show_header=True, header_style="bold magenta")
+        column_width = 5
+        lsis_table.add_column("LSI Name", style="dim", width=column_width)
+        for attribute in table_details['Table']['LocalSecondaryIndexes']:
+            lsis_table.add_row(f"IndexName: {attribute['IndexName']}")
+        console.print(lsis_table)
+
+        for attribute in table_details['Table']['LocalSecondaryIndexes']:
+            attributes = []
+            index_name = attribute['IndexName']
+            attributes.append('IndexName: ' + index_name)
+            attributes.append('IndexSizeBytes: ' + str(attribute['IndexSizeBytes']))
+            attributes.append('ItemCount: ' + str(attribute['ItemCount']))
+            attributes.append('ProjectionType: ' + attribute['Projection']['ProjectionType'])
+
+            rows_schema = '{ '
+            for schema_attribute in attribute['KeySchema']:
+                rows_schema += (schema_attribute['AttributeName'] + ': ' + schema_attribute['KeyType'] + ',')
+            rows_schema = rows_schema.rstrip(rows_schema[-1]) + '}'
+            attributes.append('Schema: ' + rows_schema)
+
+            lsi_table = Table(show_header=True, header_style="bold magenta")
+            column_width = 5
+            lsi_table.add_column("Key", style="dim", width=column_width)
+            lsi_table.add_column("Value")
+
+            console.rule(f"LSI:{table_name}-{index_name}")
+
+            for idx in attributes:
+                lsi_table.add_row(idx)
+            if len(idx) > column_width:
+                column_width = len(key)
+
+            lsi_table.columns[0].width = column_width
+            console.print(lsi_table)
+
+    # item_table.columns[0].width = column_width
+    # console.print(item_table)
+
+    # GSI
+    if 'GlobalSecondaryIndexes' in table_details['Table']:
+        console.rule("GSIs:")
+        gsis_table = Table(show_header=True, header_style="bold magenta")
+        column_width = 15
+        gsis_table.add_column("GSI Name", style="dim", width=column_width)
+
+        for attribute in table_details['Table']['GlobalSecondaryIndexes']:
+            gsis_table.add_row(f"IndexName: {attribute['IndexName']}")
+            if (len(attribute['IndexName']) + 11) > column_width:
+                column_width = len(attribute['IndexName']) + 11
+        console.print(gsis_table)
+
+        for attribute in table_details['Table']['GlobalSecondaryIndexes']:
+            rows = []
+            index_name = attribute['IndexName']
+            rows.append('IndexName: ' + index_name)
+            rows.append('IndexSizeBytes: ' + str(attribute['IndexSizeBytes']))
+            rows.append('IndexStatus: ' + attribute['IndexStatus'])
+            rows.append('ItemCount: ' + str(attribute['ItemCount']))
+            rows.append('RCU: ' + str(attribute['ProvisionedThroughput']['ReadCapacityUnits']))
+            rows.append('WCU: ' + str(attribute['ProvisionedThroughput']['WriteCapacityUnits']))
+            rows.append('ProjectionType: ' + attribute['Projection']['ProjectionType'])
+
+            rows_schema = '{ '
+            for schema_attribute in attribute['KeySchema']:
+                rows_schema += (schema_attribute['AttributeName'] + ': ' + schema_attribute['KeyType'] + ',')
+            rows_schema = rows_schema.rstrip(rows_schema[-1]) + '}'
+            rows.append('Schema: ' + rows_schema)
+
+            gsi_table = Table(show_header=True, header_style="bold magenta")
+            column_width = 10
+            gsi_table.add_column("Key", style="dim", width=column_width)
+
+            console.rule(f"GSI:{table_name}-{index_name}")
+
+            for idx_name in rows:
+                gsi_table.add_row(f'{idx_name}')
+
+            gsi_table.columns[0].width = column_width
+            console.print(gsi_table)
 
     # Item:
     console.rule("Item")
@@ -76,6 +158,7 @@ def table_get(table_name: str):
 @app.command("drawio")
 def table_drawio(table_name: str):
     print(f"Drawio table: {table_name}")
+    render_mcd(crawl_aws(table_name))
 
 
 @app.command("list")
@@ -96,11 +179,101 @@ def list_tables():
     console.print(table)
 
 
-def render_mcd(dynamo_details: dict):
-    table_name = dynamo_details['table_name']
+def render_mcd(table_details: dict):
+    table_name = table_details['table_name']
     mcd = MultiCloudDiagrams()
-    data_file = f'../output/output.{table_name}.dynamo.drawio'
+    data_file = f'output.{table_name}.dynamo.drawio'
     mcd.read_coords_from_file(data_file)
+
+    dynamo_table = table_details['Table']
+    table_arn = dynamo_table['TableArn']
+    table_name = dynamo_table['TableName']
+    metadata = {
+        'DeletionProtectionEnabled': dynamo_table['DeletionProtectionEnabled'],
+        'ItemCount': dynamo_table['ItemCount'],
+        'TableSizeBytes': dynamo_table['TableSizeBytes'],
+        'TableStatus': dynamo_table['TableStatus'],
+        'CreationDateTime': dynamo_table['CreationDateTime']
+    }
+
+    mcd.add_vertex(node_id=table_arn, node_name=table_name, node_type='dynamo', metadata=metadata)
+
+    # DynamoDB Stream
+    if 'LatestStreamArn' in dynamo_table:
+        stream_arn = dynamo_table['LatestStreamArn']
+        stream_metadata = {
+            "LatestStreamLabel": dynamo_table['LatestStreamLabel'],
+            "StreamViewType": dynamo_table['StreamSpecification']['StreamViewType']
+        }
+        mcd.add_vertex(node_id=stream_arn, node_name=dynamo_table['LatestStreamLabel'], node_type='dynamo_stream', metadata=stream_metadata)
+        mcd.add_link(f'dynamo:{table_arn}', f'dynamo_stream:{stream_arn}', action=['DynamoDBStream'])
+
+    # KeySchema
+    rows_keys = []
+    for attribute in dynamo_table['KeySchema']:
+        rows_keys.append(attribute['AttributeName'] + ' : ' + attribute['KeyType'])
+    mcd.add_list(table_name=f'Schema:{table_name}', rows=rows_keys)
+    mcd.add_link(f'dynamo:{table_arn}', f'Schema:{table_name}:list', action=['Key Schema'])
+
+    # Attributes
+    rows = []
+    for attribute in dynamo_table['AttributeDefinitions']:
+        rows.append(attribute['AttributeName'] + ' : ' + attribute['AttributeType'])
+    mcd.add_list(table_name=f'Attributes:{table_name}', rows=rows)
+    mcd.add_link(src_node_id=f'dynamo:{table_arn}', dst_node_id=f'Attributes:{table_name}:list', action=['AttributeDefinitions'])
+
+    # Local Secondary Indexes
+    if 'LocalSecondaryIndexes' in dynamo_table:
+        attributes = []
+        for attribute in dynamo_table['LocalSecondaryIndexes']:
+            attributes.append('IndexName: ' + attribute['IndexName'])
+        mcd.add_list(table_name=f'LSIs:{table_name}', rows=attributes)
+        mcd.add_link(f'dynamo:{table_arn}', f'LSIs:{table_name}:list', action=['index: LSI'])
+
+        for attribute in dynamo_table['LocalSecondaryIndexes']:
+            attributes = {}
+            index_name = attribute['IndexName']
+            attributes['IndexName'] = index_name
+            attributes['IndexSizeBytes'] = str(attribute['IndexSizeBytes'])
+            attributes['ItemCount'] = str(attribute['ItemCount'])
+            attributes['ProjectionType'] = attribute['Projection']['ProjectionType']
+
+            rows_schema = '{ '
+            for schema_attribute in attribute['KeySchema']:
+                rows_schema += (schema_attribute['AttributeName'] + ': ' + schema_attribute['KeyType'] + ',')
+            rows_schema = rows_schema.rstrip(rows_schema[-1]) + '}'
+            attributes['Schema'] = rows_schema
+
+            mcd.add_map(table_name=f'LSI:{table_name}-{index_name}', key_value_pairs=attributes)
+            mcd.add_link(f'LSIs:{table_name}:list', f'LSI:{table_name}-{index_name}:list', action=[f'LSI : {index_name}'])
+
+    # Global Secondary Indexes
+    if 'GlobalSecondaryIndexes' in dynamo_table:
+        rows = []
+        for attribute in dynamo_table['GlobalSecondaryIndexes']:
+            rows.append('IndexName: ' + attribute['IndexName'])
+        mcd.add_list(table_name=f'GSIs:{table_name}', rows=rows)
+        mcd.add_link(f'dynamo:{table_arn}', f'GSIs:{table_name}:list', action=['index: GSI'])
+
+        for attribute in dynamo_table['GlobalSecondaryIndexes']:
+            rows = []
+            index_name = attribute['IndexName']
+            rows.append('IndexName: ' + index_name)
+            rows.append('IndexSizeBytes: ' + str(attribute['IndexSizeBytes']))
+            rows.append('IndexStatus: ' + attribute['IndexStatus'])
+            rows.append('ItemCount: ' + str(attribute['ItemCount']))
+            rows.append('RCU: ' + str(attribute['ProvisionedThroughput']['ReadCapacityUnits']))
+            rows.append('WCU: ' + str(attribute['ProvisionedThroughput']['WriteCapacityUnits']))
+            rows.append('ProjectionType: ' + attribute['Projection']['ProjectionType'])
+
+            rows_schema = '{ '
+            for schema_attribute in attribute['KeySchema']:
+                rows_schema += (schema_attribute['AttributeName'] + ': ' + schema_attribute['KeyType'] + ',')
+            rows_schema = rows_schema.rstrip(rows_schema[-1]) + '}'
+            rows.append('Schema: ' + rows_schema)
+
+            mcd.add_list(table_name=f'GSI:{table_name}-{index_name}', rows=rows)
+            mcd.add_link(f'GSIs:{table_name}:list', f'GSI:{table_name}-{index_name}:list', action=[f'GSI : {index_name}'])
 
     mcd.export_to_file(data_file)
 
