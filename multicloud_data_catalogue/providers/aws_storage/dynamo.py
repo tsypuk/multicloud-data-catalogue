@@ -17,6 +17,7 @@ def table_get(table_name: str):
 
     console.rule("Generic Details")
 
+    # Table Data
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Key", style="dim", width=25)
     table.add_column("Value")
@@ -256,23 +257,23 @@ def render_mcd(table_details: dict):
         mcd.add_link(f'dynamo:{table_arn}', f'GSIs:{table_name}:list', action=['index: GSI'])
 
         for attribute in dynamo_table['GlobalSecondaryIndexes']:
-            rows = []
+            index_details = {}
             index_name = attribute['IndexName']
-            rows.append('IndexName: ' + index_name)
-            rows.append('IndexSizeBytes: ' + str(attribute['IndexSizeBytes']))
-            rows.append('IndexStatus: ' + attribute['IndexStatus'])
-            rows.append('ItemCount: ' + str(attribute['ItemCount']))
-            rows.append('RCU: ' + str(attribute['ProvisionedThroughput']['ReadCapacityUnits']))
-            rows.append('WCU: ' + str(attribute['ProvisionedThroughput']['WriteCapacityUnits']))
-            rows.append('ProjectionType: ' + attribute['Projection']['ProjectionType'])
+            index_details['IndexName'] = index_name
+            index_details['IndexSizeBytes'] = str(attribute['IndexSizeBytes'])
+            index_details['IndexStatus'] = attribute['IndexStatus']
+            index_details['ItemCount'] = str(attribute['ItemCount'])
+            index_details['RCU'] = str(attribute['ProvisionedThroughput']['ReadCapacityUnits'])
+            index_details['WCU'] = str(attribute['ProvisionedThroughput']['WriteCapacityUnits'])
+            index_details['ProjectionType'] = attribute['Projection']['ProjectionType']
 
             rows_schema = '{ '
             for schema_attribute in attribute['KeySchema']:
                 rows_schema += (schema_attribute['AttributeName'] + ': ' + schema_attribute['KeyType'] + ',')
             rows_schema = rows_schema.rstrip(rows_schema[-1]) + '}'
-            rows.append('Schema: ' + rows_schema)
+            index_details['Schema'] = rows_schema
 
-            mcd.add_list(table_name=f'GSI:{table_name}-{index_name}', rows=rows)
+            mcd.add_map(table_name=f'GSI:{table_name}-{index_name}', key_value_pairs=index_details)
             mcd.add_link(f'GSIs:{table_name}:list', f'GSI:{table_name}-{index_name}:list', action=[f'GSI : {index_name}'])
 
     mcd.export_to_file(data_file)
