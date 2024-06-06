@@ -160,6 +160,28 @@ def print_gsi(table_details):
             console.print(gsi_table)
 
 
+def print_attribute(table_details):
+    # Attributes
+    console.rule("Attributes")
+
+    attr_table = Table(show_header=True, header_style="bold magenta")
+    column1_width = 15
+    column2_width = 4
+    attr_table.add_column("AttributeName", style="dim", width=column1_width)
+    attr_table.add_column("Type", width=column2_width)
+
+    for attribute in table_details['Table']['AttributeDefinitions']:
+        attr_table.add_row(f"{attribute['AttributeName']}", f"{attribute['AttributeType']}")
+        if len(attribute['AttributeName']) > column1_width:
+            column1_width = len(attribute['AttributeName'])
+        if len(attribute['AttributeType']) > column2_width:
+            column2_width = len(attribute['AttributeType'])
+
+    attr_table.columns[0].width = column1_width
+    attr_table.columns[1].width = column2_width
+    console.print(attr_table)
+
+
 def print_item(table_details):
     # Item:
     console.rule("Item")
@@ -202,7 +224,7 @@ def list_tables():
 
         # crawl Table
         if table_name in table_data:
-            print(f'Using Table data from previous session')
+            print('Using Table data from previous session')
         else:
             print(f'Crawling: {table_name}')
             table_data[table_name] = crawl_aws(table_name)
@@ -215,7 +237,7 @@ def list_tables():
 
         table_operations = True
         while table_operations:
-            choices = ['schema', 'drawio', 'crawl']
+            choices = ['schema', 'drawio', 'crawl', 'attr']
 
             if 'item' in table_details['Table']:
                 choices.append('item')
@@ -242,6 +264,8 @@ def list_tables():
                     table_data[table_name]['crawl_time'] = datetime.now()
                     table_details = table_data[table_name]
                     print(f"Last crawl for: {table_details['crawl_time']}")
+                case 'attr':
+                    print_attribute(table_details)
                 case 'item':
                     print_item(table_details)
                 case 'drawio':
