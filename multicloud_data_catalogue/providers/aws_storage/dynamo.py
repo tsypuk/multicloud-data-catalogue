@@ -116,12 +116,14 @@ def print_gsi(table_details):
         console.rule("GSIs:")
         gsis_table = Table(show_header=True, header_style="bold magenta")
         column_width = 15
+        gsis_table.add_column("#", style="dim", width=3)
         gsis_table.add_column("GSI Name", style="dim", width=column_width)
 
-        for attribute in table_details['Table']['GlobalSecondaryIndexes']:
-            gsis_table.add_row(f"IndexName: {attribute['IndexName']}")
-            if len(f"IndexName: {attribute['IndexName']}") > column_width:
-                column_width = len(f"IndexName: {attribute['IndexName']}")
+        for idx, attribute in enumerate(table_details['Table']['GlobalSecondaryIndexes'], start=1):
+            gsis_table.add_row(f'{idx}', f"{attribute['IndexName']}")
+            if len(attribute['IndexName']) > column_width:
+                column_width = len(attribute['IndexName'])
+        gsis_table.columns[1].width = column_width
         console.print(gsis_table)
 
         for attribute in table_details['Table']['GlobalSecondaryIndexes']:
@@ -203,12 +205,14 @@ def list_tables():
 
         table_operations = True
         while table_operations:
-            choices = ['schema', 'item', 'drawio', 'back2list']
+            choices = ['schema', 'item', 'drawio']
 
             if 'LocalSecondaryIndexes' in table_details['Table']:
                 choices.append('lsi')
             if 'GlobalSecondaryIndexes' in table_details['Table']:
                 choices.append('gsi')
+
+            choices.append('back')
 
             action = Prompt.ask(f"Choose operation for table: {table_name}",
                                 choices=choices,
@@ -224,7 +228,7 @@ def list_tables():
                     print_item(table_details)
                 case 'drawio':
                     render_mcd(table_details=table_details)
-                case 'back2list':
+                case 'back':
                     table_operations = False
 
 
