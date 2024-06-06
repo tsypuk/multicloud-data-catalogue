@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import boto3
 import typer
 from rich.console import Console
@@ -178,6 +180,7 @@ def print_item(table_details):
 def list_tables():
     print("Listing tables...")
     table_names = dynamodb_client.list_tables()['TableNames']
+    table_data = {}
 
     table_select = True
     while table_select:
@@ -198,15 +201,24 @@ def list_tables():
         print(table_name)
 
         # crawl Table
-        print(f'Crawling: {table_name}')
-        table_details = crawl_aws(table_name)
+        if table_name in table_data:
+            print(f'Using Table data from previous session')
+        else:
+            print(f'Crawling: {table_name}')
+            table_data[table_name] = crawl_aws(table_name)
+            table_data[table_name]['crawl_time'] = datetime.now()
+
+        table_details = table_data[table_name]
+        print(f"Last crawl for: {table_details['crawl_time']}")
 
         print_table_info(table_details)
 
         table_operations = True
         while table_operations:
-            choices = ['schema', 'item', 'drawio']
+            choices = ['schema', 'drawio', 'crawl']
 
+            if 'item' in table_details['Table']:
+                choices.append('item')
             if 'LocalSecondaryIndexes' in table_details['Table']:
                 choices.append('lsi')
             if 'GlobalSecondaryIndexes' in table_details['Table']:
@@ -224,6 +236,12 @@ def list_tables():
                     print_lsi(table_details)
                 case 'gsi':
                     print_gsi(table_details)
+                case 'crawl':
+                    print(f'Crawling: {table_name}')
+                    table_data[table_name] = crawl_aws(table_name)
+                    table_data[table_name]['crawl_time'] = datetime.now()
+                    table_details = table_data[table_name]
+                    print(f"Last crawl for: {table_details['crawl_time']}")
                 case 'item':
                     print_item(table_details)
                 case 'drawio':
@@ -376,7 +394,7 @@ def crawl_aws(table_name: str) -> dict:
     scan_result = dynamodb_client.scan(TableName=table_name, Limit=5, Select='ALL_ATTRIBUTES')
     if 'Items' in scan_result and len(scan_result['Items']) > 0:
         result = {}
-    for item in scan_result['Items']:
-        result.update(item)
-    table_details['item'] = result
+        for item in scan_result['Items']:
+            result.update(item)
+        table_details['item'] = result
     return table_details
