@@ -1,6 +1,7 @@
 import boto3
 import typer
 from rich.console import Console
+from rich.prompt import Prompt
 from rich.table import Table
 
 from multicloud_diagrams import MultiCloudDiagrams
@@ -14,33 +15,6 @@ console = Console()
 def table_get(table_name: str):
     print(f"Getting table: {table_name}")
     table_details = crawl_aws(table_name)
-
-    console.rule("Generic Details")
-
-    # Table Data
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("Key", style="dim", width=25)
-    table.add_column("Value")
-    table.add_row('ARN', table_details['arn'])
-    table.add_row('Table_Name', table_details['table_name'])
-    table.add_row('TableStatus', table_details['Table']['TableStatus'])
-    table.add_row('CreationDateTime', table_details['Table']['CreationDateTime'])
-    table.add_row('TableSizeBytes', f"{table_details['Table']['TableSizeBytes']}")
-    table.add_row('ItemCount', f"{table_details['Table']['ItemCount']}")
-    table.add_row('DeletionProtectionEnabled', f"{table_details['Table']['DeletionProtectionEnabled']}")
-    console.print(table)
-
-    # Key Schema
-    console.rule("Key Schema")
-    schema_table = Table(show_header=True, header_style="bold magenta")
-    column_width = 5
-    schema_table.add_column("Key", style="dim", width=column_width)
-    schema_table.add_column("Value")
-    for index, value in enumerate(table_details['Table']['KeySchema']):
-        schema_table.add_row(f'{index}', f'{value}')
-        # if len(index) > column_width:
-        #     column_width = len(index)
-    console.print(schema_table)
 
     console.rule("SSE")
     # SSE
@@ -59,6 +33,45 @@ def table_get(table_name: str):
     else:
         print('NO SSE')
 
+
+@app.command("drawio")
+def table_drawio(table_name: str):
+    print(f"Drawio table: {table_name}")
+    render_mcd(crawl_aws(table_name))
+
+
+def print_table_info(table_details):
+    console.rule("Generic Details")
+
+    # Table Data
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Key", style="dim", width=25)
+    table.add_column("Value")
+    table.add_row('ARN', table_details['arn'])
+    table.add_row('Table_Name', table_details['table_name'])
+    table.add_row('TableStatus', table_details['Table']['TableStatus'])
+    table.add_row('CreationDateTime', table_details['Table']['CreationDateTime'])
+    table.add_row('TableSizeBytes', f"{table_details['Table']['TableSizeBytes']}")
+    table.add_row('ItemCount', f"{table_details['Table']['ItemCount']}")
+    table.add_row('DeletionProtectionEnabled', f"{table_details['Table']['DeletionProtectionEnabled']}")
+    console.print(table)
+
+
+def print_table_schema(table_details):
+    # Key Schema
+    console.rule("Key Schema")
+    schema_table = Table(show_header=True, header_style="bold magenta")
+    column_width = 5
+    schema_table.add_column("Key", style="dim", width=column_width)
+    schema_table.add_column("Value")
+    for index, value in enumerate(table_details['Table']['KeySchema']):
+        schema_table.add_row(f'{index}', f'{value}')
+        # if len(index) > column_width:
+        #     column_width = len(index)
+    console.print(schema_table)
+
+
+def print_lsi(table_details):
     if 'LocalSecondaryIndexes' in table_details['Table']:
         lsis_table = Table(show_header=True, header_style="bold magenta")
         column_width = 5
@@ -86,19 +99,18 @@ def table_get(table_name: str):
             lsi_table.add_column("Key", style="dim", width=column_width)
             lsi_table.add_column("Value")
 
-            console.rule(f"LSI:{table_name}-{index_name}")
+            console.rule(f"LSI:{index_name}")
 
             for idx in attributes:
                 lsi_table.add_row(idx)
             if len(idx) > column_width:
-                column_width = len(key)
+                column_width = len(idx)
 
             lsi_table.columns[0].width = column_width
             console.print(lsi_table)
 
-    # item_table.columns[0].width = column_width
-    # console.print(item_table)
 
+def print_gsi(table_details):
     # GSI
     if 'GlobalSecondaryIndexes' in table_details['Table']:
         console.rule("GSIs:")
@@ -108,8 +120,8 @@ def table_get(table_name: str):
 
         for attribute in table_details['Table']['GlobalSecondaryIndexes']:
             gsis_table.add_row(f"IndexName: {attribute['IndexName']}")
-            if (len(attribute['IndexName']) + 11) > column_width:
-                column_width = len(attribute['IndexName']) + 11
+            if len(f"IndexName: {attribute['IndexName']}") > column_width:
+                column_width = len(f"IndexName: {attribute['IndexName']}")
         console.print(gsis_table)
 
         for attribute in table_details['Table']['GlobalSecondaryIndexes']:
@@ -133,14 +145,18 @@ def table_get(table_name: str):
             column_width = 10
             gsi_table.add_column("Key", style="dim", width=column_width)
 
-            console.rule(f"GSI:{table_name}-{index_name}")
+            console.rule(f"GSI:-{index_name}")
 
             for idx_name in rows:
                 gsi_table.add_row(f'{idx_name}')
+                if len(idx_name) > column_width:
+                    column_width = len(idx_name)
 
             gsi_table.columns[0].width = column_width
             console.print(gsi_table)
 
+
+def print_item(table_details):
     # Item:
     console.rule("Item")
     item_table = Table(show_header=True, header_style="bold magenta")
@@ -156,28 +172,60 @@ def table_get(table_name: str):
     console.print(item_table)
 
 
-@app.command("drawio")
-def table_drawio(table_name: str):
-    print(f"Drawio table: {table_name}")
-    render_mcd(crawl_aws(table_name))
-
-
 @app.command("list")
 def list_tables():
     print("Listing tables...")
-    response = dynamodb_client.list_tables()
+    table_names = dynamodb_client.list_tables()['TableNames']
 
-    table_names = response['TableNames']
+    table_select = True
+    while table_select:
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Table name")
+        for index, table_name in enumerate(table_names):
+            table.add_row(
+                f"{index}", table_name
+            )
 
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("#", style="dim", width=3)
-    table.add_column("Table name")
-    for index, table_name in enumerate(table_names):
-        table.add_row(
-            f"#{index}", table_name
-        )
+        # tables = list(table_names.values())
 
-    console.print(table)
+        console.print(table)
+        table_id = Prompt.ask("Enter Table ID", default=0)
+        print(table_id)
+        table_name = table_names[int(table_id)]
+        print(table_name)
+
+        # crawl Table
+        print(f'Crawling: {table_name}')
+        table_details = crawl_aws(table_name)
+
+        print_table_info(table_details)
+
+        table_operations = True
+        while table_operations:
+            choices = ['schema', 'item', 'drawio', 'back2list']
+
+            if 'LocalSecondaryIndexes' in table_details['Table']:
+                choices.append('lsi')
+            if 'GlobalSecondaryIndexes' in table_details['Table']:
+                choices.append('gsi')
+
+            action = Prompt.ask(f"Choose operation for table: {table_name}",
+                                choices=choices,
+                                default='schema')
+            match action:
+                case 'schema':
+                    print_table_schema(table_details)
+                case 'lsi':
+                    print_lsi(table_details)
+                case 'gsi':
+                    print_gsi(table_details)
+                case 'item':
+                    print_item(table_details)
+                case 'drawio':
+                    render_mcd(table_details=table_details)
+                case 'back2list':
+                    table_operations = False
 
 
 def render_mcd(table_details: dict):
