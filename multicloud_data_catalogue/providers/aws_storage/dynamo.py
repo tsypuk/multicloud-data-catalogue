@@ -34,7 +34,7 @@ def table_get(table_name: str):
 
     table_operations = True
     while table_operations:
-        choices = ['schema', 'drawio', 'crawl', 'attr']
+        choices = ['schema', 'drawio', 'crawl', 'attr', 'info']
 
         if 'item' in table_details:
             choices.append('item')
@@ -64,6 +64,8 @@ def table_get(table_name: str):
                 print(f"Last crawl for: {table_details['crawl_time']}")
             case 'attr':
                 print_attribute(table_details)
+            case 'info':
+                print_table_info(table_details)
             case 'item':
                 print_item(table_details)
             case 'drawio':
