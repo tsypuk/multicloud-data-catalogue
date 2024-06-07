@@ -11,7 +11,7 @@ packages = [{ include = "multicloud_data_catalogue" }]
 mcdc = "multicloud_data_catalogue.main:app"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 typer = "^0.9.0"
 multicloud-diagrams = "^0.3.13"
 #multicloud-diagrams = { path = "../multicloud-diagrams/multicloud-diagrams", develop = true }
@@ -19,6 +19,7 @@ boto3 = "^1.28.29"
 rich = "^13.5.2"
 flakehell = "^0.9.0"
 flake8 = "3.9.0"
+git-changelog = "^2.5.2"
 
 [tool.flakehell]
 exclude = ["README.md", "./venv/", "./docs"]
