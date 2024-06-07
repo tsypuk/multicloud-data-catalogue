@@ -12,34 +12,66 @@ app = typer.Typer()
 dynamodb_client = boto3.client('dynamodb')
 console = Console()
 
+table_data = {}
+table_names = []
+
 
 @app.command("get")
 def table_get(table_name: str):
     print(f"Getting table: {table_name}")
-    table_details = crawl_aws(table_name)
-
-    console.rule("SSE")
-    # SSE
-    if 'SSEDescription' in table_details['Table']:
-        sse_table = Table(show_header=True, header_style="bold magenta")
-        column_width = 5
-        sse_table.add_column("Key", style="dim", width=column_width)
-        sse_table.add_column("Value")
-        for (key, value) in table_details['Table']['SSEDescription'].items():
-            sse_table.add_row(f'{key}', f'{value}')
-            if len(key) > column_width:
-                column_width = len(key)
-
-        sse_table.columns[0].width = column_width
-        console.print(sse_table)
+    # crawl Table
+    if table_name in table_data:
+        print('Using Table data from previous session')
     else:
-        print('NO SSE')
+        print(f'Crawling: {table_name}')
+        table_data[table_name] = crawl_aws(table_name)
+        table_data[table_name]['crawl_time'] = datetime.now()
 
+    table_details = table_data[table_name]
+    print(f"Last crawl for: {table_details['crawl_time']}")
 
-@app.command("drawio")
-def table_drawio(table_name: str):
-    print(f"Drawio table: {table_name}")
-    render_mcd(crawl_aws(table_name))
+    print_table_info(table_details)
+
+    table_operations = True
+    while table_operations:
+        choices = ['schema', 'drawio', 'crawl', 'attr']
+
+        if 'item' in table_details:
+            choices.append('item')
+        if 'LocalSecondaryIndexes' in table_details['Table']:
+            choices.append('lsi')
+        if 'GlobalSecondaryIndexes' in table_details['Table']:
+            choices.append('gsi')
+        if 'SSEDescription' in table_details['Table']:
+            choices.append('sse')
+        choices.append('back')
+
+        action = Prompt.ask(f"Choose operation for table: {table_name}",
+                            choices=choices,
+                            default='schema')
+        match action:
+            case 'schema':
+                print_table_schema(table_details)
+            case 'lsi':
+                print_lsi(table_details)
+            case 'gsi':
+                print_gsi(table_details)
+            case 'crawl':
+                print(f'Crawling: {table_name}')
+                table_data[table_name] = crawl_aws(table_name)
+                table_data[table_name]['crawl_time'] = datetime.now()
+                table_details = table_data[table_name]
+                print(f"Last crawl for: {table_details['crawl_time']}")
+            case 'attr':
+                print_attribute(table_details)
+            case 'item':
+                print_item(table_details)
+            case 'drawio':
+                render_mcd(table_details=table_details)
+            case 'sse':
+                print_sse(table_details)
+            case 'back':
+                table_operations = False
 
 
 def print_table_info(table_details):
@@ -71,6 +103,25 @@ def print_table_schema(table_details):
         # if len(index) > column_width:
         #     column_width = len(index)
     console.print(schema_table)
+
+
+def print_sse(table_details):
+    console.rule("SSE")
+    # SSE
+    if 'SSEDescription' in table_details['Table']:
+        sse_table = Table(show_header=True, header_style="bold magenta")
+        column_width = 5
+        sse_table.add_column("Key", style="dim", width=column_width)
+        sse_table.add_column("Value")
+        for (key, value) in table_details['Table']['SSEDescription'].items():
+            sse_table.add_row(f'{key}', f'{value}')
+            if len(key) > column_width:
+                column_width = len(key)
+
+        sse_table.columns[0].width = column_width
+        console.print(sse_table)
+    else:
+        print('NO SSE')
 
 
 def print_lsi(table_details):
@@ -202,7 +253,6 @@ def print_item(table_details):
 def list_tables():
     print("Listing tables...")
     table_names = dynamodb_client.list_tables()['TableNames']
-    table_data = {}
 
     table_select = True
     while table_select:
@@ -214,64 +264,13 @@ def list_tables():
                 f"{index}", table_name
             )
 
-        # tables = list(table_names.values())
-
         console.print(table)
         table_id = Prompt.ask("Enter Table ID", default=0)
         print(table_id)
         table_name = table_names[int(table_id)]
         print(table_name)
 
-        # crawl Table
-        if table_name in table_data:
-            print('Using Table data from previous session')
-        else:
-            print(f'Crawling: {table_name}')
-            table_data[table_name] = crawl_aws(table_name)
-            table_data[table_name]['crawl_time'] = datetime.now()
-
-        table_details = table_data[table_name]
-        print(f"Last crawl for: {table_details['crawl_time']}")
-
-        print_table_info(table_details)
-
-        table_operations = True
-        while table_operations:
-            choices = ['schema', 'drawio', 'crawl', 'attr']
-
-            if 'item' in table_details['Table']:
-                choices.append('item')
-            if 'LocalSecondaryIndexes' in table_details['Table']:
-                choices.append('lsi')
-            if 'GlobalSecondaryIndexes' in table_details['Table']:
-                choices.append('gsi')
-
-            choices.append('back')
-
-            action = Prompt.ask(f"Choose operation for table: {table_name}",
-                                choices=choices,
-                                default='schema')
-            match action:
-                case 'schema':
-                    print_table_schema(table_details)
-                case 'lsi':
-                    print_lsi(table_details)
-                case 'gsi':
-                    print_gsi(table_details)
-                case 'crawl':
-                    print(f'Crawling: {table_name}')
-                    table_data[table_name] = crawl_aws(table_name)
-                    table_data[table_name]['crawl_time'] = datetime.now()
-                    table_details = table_data[table_name]
-                    print(f"Last crawl for: {table_details['crawl_time']}")
-                case 'attr':
-                    print_attribute(table_details)
-                case 'item':
-                    print_item(table_details)
-                case 'drawio':
-                    render_mcd(table_details=table_details)
-                case 'back':
-                    table_operations = False
+        table_get(table_name)
 
 
 def render_mcd(table_details: dict):
